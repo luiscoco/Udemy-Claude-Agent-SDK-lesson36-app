@@ -1,0 +1,58 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent SDK LESSON 36 · Architecture and &lt;em&gt;UML workflow.&lt;/em&gt;</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/code-highlighting.css"></head><body><main><div class="brand"><a href="/">How <span>Claude Agent SDK</span> Works</a><span class="badge">LESSON 36 / STREAMING OUTPUT</span></div><header class="hero"><div><div class="eyebrow">RECEIVE · ASSEMBLE · CONFIRM</div><h1>Architecture and <em>UML workflow.</em></h1><p class="lead">Every workflow step includes its corresponding coloured code excerpt.</p></div><img src="/astronaut.png" alt="Course astronaut mascot"></header><nav class="nav" aria-label="Application sections"><a href="/">Application lab</a><a href="/learn.html">What you will learn</a><a href="/run.html">How to run</a><a href="/architecture.html" aria-current="page">Architecture & workflow</a><a href="/walkthrough.html">Code walkthrough</a><button id="theme" type="button">Dark mode</button></nav><p class="note">The diagram groups text streaming, real tool execution and final structured output. The SDK owns orchestration. Complete assistant blocks confirm provisional text; input completion is separate from tool execution.</p><a class="button" href="/architecture.svg" download>Download UML SVG</a><div class="diagram"><img src="/architecture.svg" alt="Thirteen source-linked output workflow steps"></div><section class="step workflow-step" id="workflow-step-01"><span class="number">01</span><h3>1. Validate the experiment</h3><p>The host accepts only a listed mode. The browser cannot replace tool scope, prompts or SDK options.</p><p class="source">Source: src/modes.ts · lines 3–9 · selected source; surrounding code omitted</p><pre><code class="language-typescript">export function validateConfig(value: unknown): RunConfig {
+  const c = value as Record&lt;string, unknown&gt;;
+  if (!c || typeof c !== &quot;object&quot; || !MODES.includes(c.mode as never))
+    throw new Error(&quot;Choose a listed streaming experiment.&quot;);
+  if (Object.keys(c).some((k) =&gt; k !== &quot;mode&quot;))
+    throw new Error(&quot;Only the classroom mode can be configured here.&quot;);
+  return { mode: c.mode as RunConfig[&quot;mode&quot;] };</code></pre></section><section class="step workflow-step" id="workflow-step-02"><span class="number">02</span><h3>2. Enable partial output</h3><p>includePartialMessages enables raw output events. Input remains one string prompt; output streaming is independent of streaming input.</p><p class="source">Source: src/agent.ts · lines 85–89 · selected source; surrounding code omitted</p><pre><code class="language-typescript">permissionMode: &quot;dontAsk&quot;,
+    includePartialMessages: partials,
+    settingSources: [],
+    plugins: [],
+    persistSession: false,</code></pre></section><section class="step workflow-step" id="workflow-step-03"><span class="number">03</span><h3>3. Start the actual query</h3><p>One real Query owns model and tool orchestration. Drain its output iterator through the final result.</p><p class="source">Source: src/agent.ts · lines 198–200 · selected source; surrounding code omitted</p><pre><code class="language-typescript">const q = query({ prompt: PROMPTS[c.mode], options });
+    for await (const message of q) {
+      if (message.type === &quot;stream_event&quot;) {</code></pre></section><section class="step workflow-step" id="workflow-step-04"><span class="number">04</span><h3>4. Apply three nested guards</h3><p>Distinguish the SDK wrapper, raw event type and delta type before treating a chunk as text.</p><p class="source">Source: src/agent.ts · lines 200–208 · selected source; surrounding code omitted</p><pre><code class="language-typescript">if (message.type === &quot;stream_event&quot;) {
+        rawEvents++;
+        const event = message.event;
+        if (event.type === &quot;content_block_delta&quot;) {
+          if (event.delta.type === &quot;text_delta&quot;) {
+            textDeltas++;
+            firstDeltaAtMs ??= Date.now() - started;
+          }
+          if (event.delta.type === &quot;input_json_delta&quot;) jsonDeltas++;</code></pre></section><section class="step workflow-step" id="workflow-step-05"><span class="number">05</span><h3>5. Identify the API message</h3><p>Record the API message identifier. Block indices are scoped to this message, so index zero in a later turn remains distinct.</p><p class="source">Source: src/assembler.ts · lines 20–24 · selected source; surrounding code omitted</p><pre><code class="language-typescript">if (event.type === &quot;message_start&quot;) {
+      this.messageId = event.message.id;
+    } else if (event.type === &quot;content_block_start&quot;) {
+      const c = event.content_block;
+      this.blocks.set(this.key(event.index), {</code></pre></section><section class="step workflow-step" id="workflow-step-06"><span class="number">06</span><h3>6. Accumulate indexed deltas</h3><p>Look up the current message and block index. Append text and partial JSON to separate buffers.</p><p class="source">Source: src/assembler.ts · lines 38–42 · selected source; surrounding code omitted</p><pre><code class="language-typescript">const block = this.blocks.get(this.key(event.index));
+      if (!block) return;
+      if (event.delta.type === &quot;text_delta&quot;) block.text += event.delta.text;
+      if (event.delta.type === &quot;input_json_delta&quot;)
+        block.json += event.delta.partial_json;</code></pre></section><section class="step workflow-step" id="workflow-step-07"><span class="number">07</span><h3>7. Parse stopped tool input</h3><p>Only parse JSON after the content block stops. An incomplete or malformed buffer cannot be reported as completed input.</p><p class="source">Source: src/assembler.ts · lines 46–54 · selected source; surrounding code omitted</p><pre><code class="language-typescript">block.stopped = true;
+      if (block.type === &quot;tool_use&quot; &amp;&amp; block.json) {
+        try {
+          block.input = JSON.parse(block.json);
+          block.inputComplete = true;
+        } catch {
+          block.invalidJson = true;
+        }
+      }</code></pre></section><section class="step workflow-step" id="workflow-step-08"><span class="number">08</span><h3>8. Scope actual Read execution</h3><p>Permit only the disposable lesson.txt Read. Denied calls produce real tool feedback without successful execution.</p><p class="source">Source: src/agent.ts · lines 110–114 · selected source; surrounding code omitted</p><pre><code class="language-typescript">const allowed =
+                input.tool_name === &quot;Read&quot; &amp;&amp;
+                typeof file === &quot;string&quot; &amp;&amp;
+                resolve(workspace.cwd, file) ===
+                  resolve(workspace.cwd, &quot;lesson.txt&quot;);</code></pre></section><section class="step workflow-step" id="workflow-step-09"><span class="number">09</span><h3>9. Confirm successful execution</h3><p>Actual PostToolUse marks execution completed. Receiving an input block is a separate stage.</p><p class="source">Source: src/agent.ts · lines 145–147 · selected source; surrounding code omitted</p><pre><code class="language-typescript">if (input.hook_event_name === &quot;PostToolUse&quot;)
+                tool(id || &quot;unknown&quot;, input.tool_name, &quot;completed&quot;);
+              return {};</code></pre></section><section class="step workflow-step" id="workflow-step-10"><span class="number">10</span><h3>10. Accept authoritative content</h3><p>Complete SDK text replaces the provisional block. Preserve complete content as the source of truth.</p><p class="source">Source: src/assembler.ts · lines 88–91 · selected source; surrounding code omitted</p><pre><code class="language-typescript">block.authoritative = true;
+      if (c.type === &quot;text&quot;) {
+        block.text = c.text;
+        this.assistantTexts.push(c.text);</code></pre></section><section class="step workflow-step" id="workflow-step-11"><span class="number">11</span><h3>11. Consume the final result</h3><p>Only a successful final result supplies validated structured_output. Raw JSON-looking chunks remain provisional.</p><p class="source">Source: src/agent.ts · lines 240–243 · selected source; surrounding code omitted</p><pre><code class="language-typescript">structured =
+          message.subtype === &quot;success&quot;
+            ? (message.structured_output ?? null)
+            : null;</code></pre></section><section class="step workflow-step" id="workflow-step-12"><span class="number">12</span><h3>12. Forward browser SSE</h3><p>The local host serializes actual observations into SSE frames. UTF-8 decoding and frame buffering preserve arbitrary network chunk boundaries.</p><p class="source">Source: src/server.ts · lines 128–131 · selected source; surrounding code omitted</p><pre><code class="language-typescript">const emit = (event: unknown) =&gt; {
+        if (!res.destroyed)
+          res.write(&quot;data: &quot; + JSON.stringify(event) + &quot;\n\n&quot;);
+      };</code></pre></section><section class="step workflow-step" id="workflow-step-13"><span class="number">13</span><h3>13. Render without duplicated text</h3><p>Render sanitized Markdown for complete text. Partial text uses textContent. Replace snapshots instead of appending complete content twice.</p><p class="source">Source: src/client.ts · lines 25–31 · selected source; surrounding code omitted</p><pre><code class="language-typescript">if (b.authoritative) renderMarkdown(text, b.text);
+    else {
+      text.textContent = b.text;
+      text.className = &quot;partial-text&quot;;
+    }
+    card.append(status, text);
+    fragment.append(card);</code></pre></section><footer>CLAUDE AGENT SDK · LESSON 36 · DELTAS · BLOCKS · COMPLETE CONTENT<br>TypeScript · local runtime · API key stays on the server</footer></main><script src="/navigation.js"></script><script src="/prism.js"></script><script src="/prism-markup.min.js"></script><script src="/prism-yaml.min.js"></script><script src="/prism-markdown.min.js"></script><script src="/prism-python.min.js"></script><script src="/code-highlighting.js"></script><script src="/marked.umd.js"></script><script src="/purify.min.js"></script></body></html>

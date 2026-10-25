@@ -1,0 +1,273 @@
+{
+  "lanes": [
+    "Student UI",
+    "TypeScript host",
+    "Agent SDK Query",
+    "Read tool + fixture",
+    "Indexed output blocks"
+  ],
+  "arrows": [
+    [
+      0,
+      1,
+      "1. Validate the experiment"
+    ],
+    [
+      1,
+      2,
+      "2. Enable partial output"
+    ],
+    [
+      1,
+      2,
+      "3. Start the actual query"
+    ],
+    [
+      2,
+      1,
+      "4. Apply three nested guards"
+    ],
+    [
+      2,
+      4,
+      "5. Identify the API message"
+    ],
+    [
+      2,
+      4,
+      "6. Accumulate indexed deltas"
+    ],
+    [
+      4,
+      4,
+      "7. Parse stopped tool input"
+    ],
+    [
+      2,
+      3,
+      "8. Scope actual Read execution"
+    ],
+    [
+      3,
+      1,
+      "9. Confirm successful execution"
+    ],
+    [
+      2,
+      4,
+      "10. Accept authoritative content"
+    ],
+    [
+      2,
+      1,
+      "11. Consume the final result"
+    ],
+    [
+      1,
+      0,
+      "12. Forward browser SSE"
+    ],
+    [
+      4,
+      0,
+      "13. Render without duplicated text"
+    ]
+  ],
+  "steps": [
+    {
+      "number": 1,
+      "title": "Validate the experiment",
+      "source": "src/modes.ts",
+      "code": "export function validateConfig(value: unknown): RunConfig {\n  const c = value as Record<string, unknown>;\n  if (!c || typeof c !== \"object\" || !MODES.includes(c.mode as never))\n    throw new Error(\"Choose a listed streaming experiment.\");\n  if (Object.keys(c).some((k) => k !== \"mode\"))\n    throw new Error(\"Only the classroom mode can be configured here.\");\n  return { mode: c.mode as RunConfig[\"mode\"] };",
+      "language": "typescript",
+      "explanation": "The host accepts only a listed mode. The browser cannot replace tool scope, prompts or SDK options.",
+      "firstLine": 3,
+      "lastLine": 9,
+      "anchors": [
+        "export function validateConfig(value: unknown): RunConfig {"
+      ],
+      "sourceSHA256": "e8f4319db56d49b3b6549d2ae09452c1ccbaa4a17b03d7025a7c8927d1419b81",
+      "narration": "Step 1. The host accepts only a listed mode. The browser cannot replace tool scope, prompts or SDK options. This source excerpt shows the corresponding application statement."
+    },
+    {
+      "number": 2,
+      "title": "Enable partial output",
+      "source": "src/agent.ts",
+      "code": "permissionMode: \"dontAsk\",\n    includePartialMessages: partials,\n    settingSources: [],\n    plugins: [],\n    persistSession: false,",
+      "language": "typescript",
+      "explanation": "includePartialMessages enables raw output events. Input remains one string prompt; output streaming is independent of streaming input.",
+      "firstLine": 85,
+      "lastLine": 89,
+      "anchors": [
+        "permissionMode: \"dontAsk\","
+      ],
+      "sourceSHA256": "ac0772db58971e1db6867c6b1112dd03c1f76dda2be3613ef8dd73af841fca3d",
+      "narration": "Step 2. includePartialMessages enables raw output events. Input remains one string prompt; output streaming is independent of streaming input. This source excerpt shows the corresponding application statement."
+    },
+    {
+      "number": 3,
+      "title": "Start the actual query",
+      "source": "src/agent.ts",
+      "code": "const q = query({ prompt: PROMPTS[c.mode], options });\n    for await (const message of q) {\n      if (message.type === \"stream_event\") {",
+      "language": "typescript",
+      "explanation": "One real Query owns model and tool orchestration. Drain its output iterator through the final result.",
+      "firstLine": 198,
+      "lastLine": 200,
+      "anchors": [
+        "const q = query({ prompt: PROMPTS[c.mode], options });"
+      ],
+      "sourceSHA256": "ac0772db58971e1db6867c6b1112dd03c1f76dda2be3613ef8dd73af841fca3d",
+      "narration": "Step 3. One real Query owns model and tool orchestration. Drain its output iterator through the final result. This source excerpt shows the corresponding application statement."
+    },
+    {
+      "number": 4,
+      "title": "Apply three nested guards",
+      "source": "src/agent.ts",
+      "code": "if (message.type === \"stream_event\") {\n        rawEvents++;\n        const event = message.event;\n        if (event.type === \"content_block_delta\") {\n          if (event.delta.type === \"text_delta\") {\n            textDeltas++;\n            firstDeltaAtMs ??= Date.now() - started;\n          }\n          if (event.delta.type === \"input_json_delta\") jsonDeltas++;",
+      "language": "typescript",
+      "explanation": "Distinguish the SDK wrapper, raw event type and delta type before treating a chunk as text.",
+      "firstLine": 200,
+      "lastLine": 208,
+      "anchors": [
+        "if (message.type === \"stream_event\") {"
+      ],
+      "sourceSHA256": "ac0772db58971e1db6867c6b1112dd03c1f76dda2be3613ef8dd73af841fca3d",
+      "narration": "Step 4. Distinguish the SDK wrapper, raw event type and delta type before treating a chunk as text. This source excerpt shows the corresponding application statement."
+    },
+    {
+      "number": 5,
+      "title": "Identify the API message",
+      "source": "src/assembler.ts",
+      "code": "if (event.type === \"message_start\") {\n      this.messageId = event.message.id;\n    } else if (event.type === \"content_block_start\") {\n      const c = event.content_block;\n      this.blocks.set(this.key(event.index), {",
+      "language": "typescript",
+      "explanation": "Record the API message identifier. Block indices are scoped to this message, so index zero in a later turn remains distinct.",
+      "firstLine": 20,
+      "lastLine": 24,
+      "anchors": [
+        "if (event.type === \"message_start\") {"
+      ],
+      "sourceSHA256": "3abcf1f3cb1ba5fa4ba7841e2094faa3e5077e5edf3ec0ef68f9425fcc4b1bb5",
+      "narration": "Step 5. Record the API message identifier. Block indices are scoped to this message, so index zero in a later turn remains distinct. This source excerpt shows the corresponding application statement."
+    },
+    {
+      "number": 6,
+      "title": "Accumulate indexed deltas",
+      "source": "src/assembler.ts",
+      "code": "const block = this.blocks.get(this.key(event.index));\n      if (!block) return;\n      if (event.delta.type === \"text_delta\") block.text += event.delta.text;\n      if (event.delta.type === \"input_json_delta\")\n        block.json += event.delta.partial_json;",
+      "language": "typescript",
+      "explanation": "Look up the current message and block index. Append text and partial JSON to separate buffers.",
+      "firstLine": 38,
+      "lastLine": 42,
+      "anchors": [
+        "const block = this.blocks.get(this.key(event.index));"
+      ],
+      "sourceSHA256": "3abcf1f3cb1ba5fa4ba7841e2094faa3e5077e5edf3ec0ef68f9425fcc4b1bb5",
+      "narration": "Step 6. Look up the current message and block index. Append text and partial JSON to separate buffers. This source excerpt shows the corresponding application statement."
+    },
+    {
+      "number": 7,
+      "title": "Parse stopped tool input",
+      "source": "src/assembler.ts",
+      "code": "block.stopped = true;\n      if (block.type === \"tool_use\" && block.json) {\n        try {\n          block.input = JSON.parse(block.json);\n          block.inputComplete = true;\n        } catch {\n          block.invalidJson = true;\n        }\n      }",
+      "language": "typescript",
+      "explanation": "Only parse JSON after the content block stops. An incomplete or malformed buffer cannot be reported as completed input.",
+      "firstLine": 46,
+      "lastLine": 54,
+      "anchors": [
+        "block.stopped = true;"
+      ],
+      "sourceSHA256": "3abcf1f3cb1ba5fa4ba7841e2094faa3e5077e5edf3ec0ef68f9425fcc4b1bb5",
+      "narration": "Step 7. Only parse JSON after the content block stops. An incomplete or malformed buffer cannot be reported as completed input. This source excerpt shows the corresponding application statement."
+    },
+    {
+      "number": 8,
+      "title": "Scope actual Read execution",
+      "source": "src/agent.ts",
+      "code": "const allowed =\n                input.tool_name === \"Read\" &&\n                typeof file === \"string\" &&\n                resolve(workspace.cwd, file) ===\n                  resolve(workspace.cwd, \"lesson.txt\");",
+      "language": "typescript",
+      "explanation": "Permit only the disposable lesson.txt Read. Denied calls produce real tool feedback without successful execution.",
+      "firstLine": 110,
+      "lastLine": 114,
+      "anchors": [
+        "const allowed ="
+      ],
+      "sourceSHA256": "ac0772db58971e1db6867c6b1112dd03c1f76dda2be3613ef8dd73af841fca3d",
+      "narration": "Step 8. Permit only the disposable lesson.txt Read. Denied calls produce real tool feedback without successful execution. This source excerpt shows the corresponding application statement."
+    },
+    {
+      "number": 9,
+      "title": "Confirm successful execution",
+      "source": "src/agent.ts",
+      "code": "if (input.hook_event_name === \"PostToolUse\")\n                tool(id || \"unknown\", input.tool_name, \"completed\");\n              return {};",
+      "language": "typescript",
+      "explanation": "Actual PostToolUse marks execution completed. Receiving an input block is a separate stage.",
+      "firstLine": 145,
+      "lastLine": 147,
+      "anchors": [
+        "if (input.hook_event_name === \"PostToolUse\")"
+      ],
+      "sourceSHA256": "ac0772db58971e1db6867c6b1112dd03c1f76dda2be3613ef8dd73af841fca3d",
+      "narration": "Step 9. Actual PostToolUse marks execution completed. Receiving an input block is a separate stage. This source excerpt shows the corresponding application statement."
+    },
+    {
+      "number": 10,
+      "title": "Accept authoritative content",
+      "source": "src/assembler.ts",
+      "code": "block.authoritative = true;\n      if (c.type === \"text\") {\n        block.text = c.text;\n        this.assistantTexts.push(c.text);",
+      "language": "typescript",
+      "explanation": "Complete SDK text replaces the provisional block. Preserve complete content as the source of truth.",
+      "firstLine": 88,
+      "lastLine": 91,
+      "anchors": [
+        "block.authoritative = true;"
+      ],
+      "sourceSHA256": "3abcf1f3cb1ba5fa4ba7841e2094faa3e5077e5edf3ec0ef68f9425fcc4b1bb5",
+      "narration": "Step 10. Complete SDK text replaces the provisional block. Preserve complete content as the source of truth. This source excerpt shows the corresponding application statement."
+    },
+    {
+      "number": 11,
+      "title": "Consume the final result",
+      "source": "src/agent.ts",
+      "code": "structured =\n          message.subtype === \"success\"\n            ? (message.structured_output ?? null)\n            : null;",
+      "language": "typescript",
+      "explanation": "Only a successful final result supplies validated structured_output. Raw JSON-looking chunks remain provisional.",
+      "firstLine": 240,
+      "lastLine": 243,
+      "anchors": [
+        "structured ="
+      ],
+      "sourceSHA256": "ac0772db58971e1db6867c6b1112dd03c1f76dda2be3613ef8dd73af841fca3d",
+      "narration": "Step 11. Only a successful final result supplies validated structured_output. Raw JSON-looking chunks remain provisional. This source excerpt shows the corresponding application statement."
+    },
+    {
+      "number": 12,
+      "title": "Forward browser SSE",
+      "source": "src/server.ts",
+      "code": "const emit = (event: unknown) => {\n        if (!res.destroyed)\n          res.write(\"data: \" + JSON.stringify(event) + \"\\n\\n\");\n      };",
+      "language": "typescript",
+      "explanation": "The local host serializes actual observations into SSE frames. UTF-8 decoding and frame buffering preserve arbitrary network chunk boundaries.",
+      "firstLine": 128,
+      "lastLine": 131,
+      "anchors": [
+        "const emit = (event: unknown) => {"
+      ],
+      "sourceSHA256": "a99a1a265e46b81ca3b8b2dc148212ff11a321b0ec476ac64cfc9ab4c3b7baec",
+      "narration": "Step 12. The local host serializes actual observations into SSE frames. UTF-8 decoding and frame buffering preserve arbitrary network chunk boundaries. This source excerpt shows the corresponding application statement."
+    },
+    {
+      "number": 13,
+      "title": "Render without duplicated text",
+      "source": "src/client.ts",
+      "code": "if (b.authoritative) renderMarkdown(text, b.text);\n    else {\n      text.textContent = b.text;\n      text.className = \"partial-text\";\n    }\n    card.append(status, text);\n    fragment.append(card);",
+      "language": "typescript",
+      "explanation": "Render sanitized Markdown for complete text. Partial text uses textContent. Replace snapshots instead of appending complete content twice.",
+      "firstLine": 25,
+      "lastLine": 31,
+      "anchors": [
+        "if (b.authoritative) renderMarkdown(text, b.text);"
+      ],
+      "sourceSHA256": "c0caa5f8d1258c7d5240440a90e7ae5245d423ac89511351bac38d0a063ef167",
+      "narration": "Step 13. Render sanitized Markdown for complete text. Partial text uses textContent. Replace snapshots instead of appending complete content twice. This source excerpt shows the corresponding application statement."
+    }
+  ]
+}
